@@ -9,105 +9,7 @@ import type {
 } from '../types/okr';
 
 class OKRService {
-  // Static OKR structure based on IC3 infrastructure goals
-  private static IC3_OBJECTIVES: Omit<Objective, 'keyResults'>[] = [
-    {
-      id: 'obj-1',
-      title: 'Enhance Infrastructure Reliability & Performance',
-      description: 'Improve system reliability, reduce downtime, and optimize performance across all IC3 infrastructure components',
-      owner: 'IC3 Infrastructure Team',
-      quarter: 'Q3 2025'
-    },
-    {
-      id: 'obj-2', 
-      title: 'Scale Platform for Future Growth',
-      description: 'Build scalable architecture and monitoring capabilities to support increased user load and feature expansion',
-      owner: 'Platform Engineering Team',
-      quarter: 'Q3 2025'
-    },
-    {
-      id: 'obj-3',
-      title: 'Optimize Core Components Performance',
-      description: 'Enhance messaging, calling, and core platform components for better user experience and resource efficiency',
-      owner: 'Core Components Team', 
-      quarter: 'Q3 2025'
-    }
-  ];
-
-  private static KEY_RESULTS_MAPPING: Omit<KeyResult, 'workItems'>[] = [
-    // Objective 1: Infrastructure Reliability
-    {
-      id: 'kr-1-1',
-      objectiveId: 'obj-1',
-      title: 'Achieve 99.9% System Uptime',
-      description: 'Maintain system availability above 99.9% with less than 8.76 hours downtime per month',
-      target: '99.9% uptime',
-      current: '99.7% uptime',
-      progress: 85,
-      status: 'on-track',
-      summary: 'Infrastructure reliability improvements are showing strong progress with uptime increasing from 99.5% to 99.7%. Key initiatives include automated failover systems and enhanced monitoring. Current trajectory suggests we will achieve the 99.9% target by end of Q3.'
-    },
-    {
-      id: 'kr-1-2', 
-      objectiveId: 'obj-1',
-      title: 'Reduce Average Response Time by 25%',
-      description: 'Optimize infrastructure to achieve sub-200ms average response times across all services',
-      target: '< 200ms avg response',
-      current: '245ms avg response',
-      progress: 70,
-      status: 'on-track',
-      summary: 'Performance optimization efforts have reduced average response times from 320ms to 245ms, representing a 23% improvement. Database query optimization and CDN improvements are the primary drivers. Additional caching strategies are planned to reach the final target.'
-    },
-
-    // Objective 2: Platform Scalability  
-    {
-      id: 'kr-2-1',
-      objectiveId: 'obj-2', 
-      title: 'Implement Horizontal Scaling for 3x Load Capacity',
-      description: 'Deploy auto-scaling infrastructure to handle 300% current peak load',
-      target: '3x load capacity',
-      current: '2.1x load capacity', 
-      progress: 70,
-      status: 'on-track',
-      summary: 'Platform scalability initiatives have successfully increased load handling capacity from 1x to 2.1x baseline. Container orchestration and load balancing improvements are key contributors. Auto-scaling policies are being fine-tuned to achieve the final 3x target capacity.'
-    },
-    {
-      id: 'kr-2-2',
-      objectiveId: 'obj-2',
-      title: 'Deploy Advanced Monitoring & Analytics Dashboard',
-      description: 'Implement comprehensive monitoring with real-time analytics and predictive alerting',
-      target: '100% service coverage',
-      current: '75% service coverage',
-      progress: 75,
-      status: 'on-track', 
-      summary: 'Advanced monitoring deployment is progressing well with 75% of services now covered by enhanced analytics. Real-time dashboards are operational for critical services. Predictive alerting algorithms are being calibrated to reduce false positives while maintaining early detection capabilities.'
-    },
-
-    // Objective 3: Core Components Performance
-    {
-      id: 'kr-3-1',
-      objectiveId: 'obj-3',
-      title: 'Optimize Memory Usage by 30%',
-      description: 'Reduce memory footprint across messaging and calling components',
-      target: '30% memory reduction',
-      current: '18% memory reduction',
-      progress: 60,
-      status: 'on-track',
-      summary: 'Memory optimization efforts have achieved an 18% reduction in memory usage across core components. Object pooling and garbage collection tuning are primary contributors. Additional optimizations in message queuing and session management are planned to reach the 30% target.'
-    },
-    {
-      id: 'kr-3-2',
-      objectiveId: 'obj-3', 
-      title: 'Improve Network Efficiency by 20%',
-      description: 'Optimize network protocols and data compression for better bandwidth utilization',
-      target: '20% bandwidth reduction',
-      current: '12% bandwidth reduction',
-      progress: 60,
-      status: 'on-track',
-      summary: 'Network efficiency improvements have reduced bandwidth usage by 12% through protocol optimizations and enhanced compression algorithms. Message batching and connection pooling strategies are showing positive results. Further improvements in streaming protocols are expected to achieve the 20% target.'
-    }
-  ];
-
+  // Build objectives dynamically from summaries and work items
   async getOKRStructure(): Promise<Objective[]> {
     try {
       const [summaries, allWorkItems] = await Promise.all([
@@ -115,34 +17,162 @@ class OKRService {
         workItemsApi.getAll()
       ]);
 
-      return OKRService.IC3_OBJECTIVES.map(objective => ({
-        ...objective,
-        keyResults: OKRService.KEY_RESULTS_MAPPING
-          .filter(kr => kr.objectiveId === objective.id)
-          .map(keyResult => ({
-            ...keyResult,
-            workItems: this.mapWorkItemsToKeyResult(keyResult.id, allWorkItems)
-          }))
+      // Group work items by summary
+      const workItemsBySummary = this.groupWorkItemsBySummary(allWorkItems);
+      
+      // Convert summaries to objectives with key results derived from work items
+      const objectives: Objective[] = summaries.map(summary => ({
+        id: `obj-${summary.id}`,
+        title: summary.title,
+        description: summary.description || '',
+        owner: this.extractOwnerFromWorkItems(workItemsBySummary[summary.id] || []),
+        quarter: this.determineQuarter(summary.created_at),
+        keyResults: this.generateKeyResultsFromWorkItems(summary.id, workItemsBySummary[summary.id] || [])
       }));
+
+      return objectives;
     } catch (error) {
       console.error('Error building OKR structure:', error);
       return [];
     }
   }
 
-  private mapWorkItemsToKeyResult(keyResultId: string, allWorkItems: WorkItem[]): WorkItem[] {
-    // Map work items to key results based on themes and areas
-    const mappings: Record<string, number[]> = {
-      'kr-1-1': [4111695], // Infrastructure Reliability -> uptime
-      'kr-1-2': [4111695], // Infrastructure Reliability -> performance 
-      'kr-2-1': [4213334], // Platform Scalability -> scaling
-      'kr-2-2': [4213334], // Platform Scalability -> monitoring
-      'kr-3-1': [4115742], // Core Components -> memory optimization
-      'kr-3-2': [4115742], // Core Components -> network efficiency
-    };
+  private groupWorkItemsBySummary(workItems: WorkItem[]): Record<number, WorkItem[]> {
+    return workItems.reduce((acc, item) => {
+      if (!acc[item.summary_id]) {
+        acc[item.summary_id] = [];
+      }
+      acc[item.summary_id].push(item);
+      return acc;
+    }, {} as Record<number, WorkItem[]>);
+  }
 
-    const workItemIds = mappings[keyResultId] || [];
-    return allWorkItems.filter(item => workItemIds.includes(item.id));
+  private extractOwnerFromWorkItems(workItems: WorkItem[]): string {
+    // Extract the most common assignee or area path as owner
+    const assignees = workItems
+      .map(item => item.assigned_to)
+      .filter(assignee => assignee && assignee.trim().length > 0);
+    
+    if (assignees.length === 0) {
+      // Try to extract from area path
+      const areaPaths = workItems
+        .map(item => item.area_path)
+        .filter(path => path && path.trim().length > 0);
+      
+      if (areaPaths.length > 0) {
+        // Extract team name from area path (e.g., "Project\\Team" -> "Team")
+        const teamName = areaPaths[0].split('\\').pop();
+        return teamName || 'Unassigned Team';
+      }
+      
+      return 'Unassigned Team';
+    }
+    
+    // Return the most frequent assignee
+    const assigneeCounts = assignees.reduce((acc, assignee) => {
+      acc[assignee] = (acc[assignee] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const mostFrequentAssignee = Object.entries(assigneeCounts)
+      .sort(([,a], [,b]) => b - a)[0][0];
+    
+    return mostFrequentAssignee;
+  }
+
+  private determineQuarter(createdAt: string): string {
+    const date = new Date(createdAt);
+    const month = date.getMonth() + 1; // 0-indexed to 1-indexed
+    const year = date.getFullYear();
+    
+    let quarter: number;
+    if (month <= 3) quarter = 1;
+    else if (month <= 6) quarter = 2;
+    else if (month <= 9) quarter = 3;
+    else quarter = 4;
+    
+    return `Q${quarter} ${year}`;
+  }
+
+  private generateKeyResultsFromWorkItems(summaryId: number, workItems: WorkItem[]): KeyResult[] {
+    if (workItems.length === 0) return [];
+
+    // Group work items by type to create key results
+    const workItemsByType = workItems.reduce((acc, item) => {
+      const type = item.work_item_type || 'Task';
+      if (!acc[type]) {
+        acc[type] = [];
+      }
+      acc[type].push(item);
+      return acc;
+    }, {} as Record<string, WorkItem[]>);
+
+    const keyResults: KeyResult[] = [];
+
+    Object.entries(workItemsByType).forEach(([type, items], index) => {
+      const completedItems = items.filter(item => 
+        item.state === 'Completed' || item.state === 'Done' || item.state === 'Closed'
+      );
+      
+      const totalItems = items.length;
+      const progress = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
+      
+      let status: KeyResult['status'];
+      if (progress >= 100) status = 'completed';
+      else if (progress >= 75) status = 'on-track';
+      else if (progress >= 50) status = 'at-risk';
+      else status = 'behind';
+
+      const totalEffort = items.reduce((sum, item) => sum + (item.effort || 0), 0);
+      const completedEffort = completedItems.reduce((sum, item) => sum + (item.effort || 0), 0);
+      
+      keyResults.push({
+        id: `kr-${summaryId}-${index + 1}`,
+        objectiveId: `obj-${summaryId}`,
+        title: `Complete ${type} Items`,
+        description: `Complete all ${type.toLowerCase()} items associated with this objective`,
+        target: `${totalItems} ${type.toLowerCase()} items`,
+        current: `${completedItems.length} completed`,
+        progress,
+        status,
+        summary: this.generateKeyResultSummary(type, items, completedItems, totalEffort, completedEffort),
+        workItems: items
+      });
+    });
+
+    return keyResults;
+  }
+
+  private generateKeyResultSummary(
+    type: string, 
+    allItems: WorkItem[], 
+    completedItems: WorkItem[], 
+    totalEffort: number, 
+    completedEffort: number
+  ): string {
+    const completionRate = allItems.length > 0 ? Math.round((completedItems.length / allItems.length) * 100) : 0;
+    const effortRate = totalEffort > 0 ? Math.round((completedEffort / totalEffort) * 100) : 0;
+    
+    const activeItems = allItems.filter(item => item.state === 'Active').length;
+    const inProgressItems = allItems.filter(item => 
+      item.state === 'In Progress' || item.state === 'Development' || item.state === 'Testing'
+    ).length;
+
+    let summary = `${type} completion is at ${completionRate}% with ${completedItems.length} of ${allItems.length} items completed.`;
+    
+    if (effortRate > 0 && effortRate !== completionRate) {
+      summary += ` Effort completion is at ${effortRate}%.`;
+    }
+    
+    if (activeItems > 0) {
+      summary += ` ${activeItems} items are currently active.`;
+    }
+    
+    if (inProgressItems > 0) {
+      summary += ` ${inProgressItems} items are in progress.`;
+    }
+
+    return summary;
   }
 
   async getExecutiveSummary(): Promise<ExecutiveSummary> {
@@ -151,35 +181,35 @@ class OKRService {
       const allKeyResults = objectives.flatMap(obj => obj.keyResults);
       const allWorkItems = allKeyResults.flatMap(kr => kr.workItems);
 
-      const objectivesOnTrack = objectives.filter(obj => 
-        obj.keyResults.every(kr => kr.status === 'on-track' || kr.status === 'completed')
-      ).length;
+      const objectivesOnTrack = objectives.filter(obj => {
+        const avgProgress = obj.keyResults.length > 0 
+          ? obj.keyResults.reduce((sum, kr) => sum + kr.progress, 0) / obj.keyResults.length 
+          : 0;
+        return avgProgress >= 70; // Consider 70%+ as "on track"
+      }).length;
 
       const keyResultsCompleted = allKeyResults.filter(kr => kr.status === 'completed').length;
-      const completedWorkItems = allWorkItems.filter(item => item.state === 'Completed' || item.state === 'Done').length;
+      const completedWorkItems = allWorkItems.filter(item => 
+        item.state === 'Completed' || item.state === 'Done' || item.state === 'Closed'
+      ).length;
 
-      const majorThemes = [
-        'Infrastructure Reliability', 
-        'Performance Optimization', 
-        'Platform Scalability',
-        'Monitoring & Analytics',
-        'Resource Efficiency'
-      ];
+      // Extract themes from work item tags and area paths
+      const themes = this.extractMajorThemes(allWorkItems);
+      
+      // Generate executive notes based on actual data
+      const executiveNotes = this.generateExecutiveNotes(objectives, allKeyResults, allWorkItems);
 
-      const executiveNotes = [
-        'Q3 2025 IC3 infrastructure initiatives are progressing well with strong momentum across all key areas.',
-        'Performance improvements are exceeding expectations with 23% response time reduction already achieved.',
-        'Platform scalability efforts have successfully increased capacity to 2.1x baseline, positioning us well for future growth.',
-        'Cross-team collaboration on monitoring and analytics is delivering enhanced operational visibility.',
-        'Resource optimization initiatives are showing measurable results in both memory and network efficiency.'
-      ];
+      const overallProgress = allKeyResults.length > 0 
+        ? Math.round(allKeyResults.reduce((sum, kr) => sum + kr.progress, 0) / allKeyResults.length)
+        : 0;
 
-      const overallProgress = Math.round(
-        allKeyResults.reduce((sum, kr) => sum + kr.progress, 0) / allKeyResults.length
-      );
+      // Determine quarter from most recent summary
+      const quarter = objectives.length > 0 
+        ? this.determineQuarter(new Date().toISOString()) 
+        : 'Current Quarter';
 
       return {
-        quarter: 'Q3 2025',
+        quarter,
         overallProgress,
         totalObjectives: objectives.length,
         objectivesOnTrack,
@@ -188,13 +218,13 @@ class OKRService {
         keyResultsCompleted,
         totalWorkItems: allWorkItems.length,
         completedWorkItems,
-        majorThemes,
+        majorThemes: themes,
         executiveNotes
       };
     } catch (error) {
       console.error('Error generating executive summary:', error);
       return {
-        quarter: 'Q3 2025',
+        quarter: 'Current Quarter',
         overallProgress: 0,
         totalObjectives: 0,
         objectivesOnTrack: 0,
@@ -209,6 +239,76 @@ class OKRService {
     }
   }
 
+  private extractMajorThemes(workItems: WorkItem[]): string[] {
+    const themes = new Set<string>();
+    
+    // Extract from tags
+    workItems.forEach(item => {
+      if (item.tags) {
+        item.tags.split(',').forEach(tag => {
+          const cleanTag = tag.trim();
+          if (cleanTag.length > 0) {
+            themes.add(cleanTag);
+          }
+        });
+      }
+      
+      // Extract from area paths
+      if (item.area_path) {
+        const pathParts = item.area_path.split('\\');
+        pathParts.forEach(part => {
+          const cleanPart = part.trim();
+          if (cleanPart.length > 0 && !cleanPart.includes('Project')) {
+            themes.add(cleanPart);
+          }
+        });
+      }
+    });
+
+    // Return top 5 most common themes
+    return Array.from(themes).slice(0, 5);
+  }
+
+  private generateExecutiveNotes(objectives: Objective[], keyResults: KeyResult[], workItems: WorkItem[]): string[] {
+    const notes: string[] = [];
+    
+    if (objectives.length === 0) {
+      notes.push('No objectives currently defined. Consider creating summaries to establish OKR structure.');
+      return notes;
+    }
+
+    // Overall progress note
+    const avgProgress = Math.round(keyResults.reduce((sum, kr) => sum + kr.progress, 0) / keyResults.length);
+    if (avgProgress >= 80) {
+      notes.push(`Strong progress across all initiatives with ${avgProgress}% average completion rate.`);
+    } else if (avgProgress >= 60) {
+      notes.push(`Good momentum with ${avgProgress}% average progress, some areas may need attention.`);
+    } else {
+      notes.push(`Progress at ${avgProgress}% indicates need for focused effort and possible reprioritization.`);
+    }
+
+    // Work item insights
+    const activeItems = workItems.filter(item => item.state === 'Active').length;
+    if (activeItems > 0) {
+      notes.push(`${activeItems} work items are currently active across ${objectives.length} objectives.`);
+    }
+
+    // Team/assignment insights
+    const assignedItems = workItems.filter(item => item.assigned_to && item.assigned_to.trim().length > 0).length;
+    const unassignedItems = workItems.length - assignedItems;
+    if (unassignedItems > 0) {
+      notes.push(`${unassignedItems} work items require assignment for improved ownership and accountability.`);
+    }
+
+    // Priority insights
+    const highPriorityItems = workItems.filter(item => item.priority === 1).length;
+    if (highPriorityItems > 0) {
+      notes.push(`${highPriorityItems} high-priority items require immediate attention to maintain momentum.`);
+    }
+
+    return notes;
+  }
+
   async getProgress(objectiveId: string): Promise<OKRProgress> {
     const objectives = await this.getOKRStructure();
     const objective = objectives.find(obj => obj.id === objectiveId);
@@ -220,16 +320,18 @@ class OKRService {
     const workItems = objective.keyResults.flatMap(kr => kr.workItems);
     const totalEffort = workItems.reduce((sum, item) => sum + (item.effort || 0), 0);
     const completedEffort = workItems
-      .filter(item => item.state === 'Completed' || item.state === 'Done')
+      .filter(item => item.state === 'Completed' || item.state === 'Done' || item.state === 'Closed')
       .reduce((sum, item) => sum + (item.effort || 0), 0);
     
     const totalBusinessValue = workItems.reduce((sum, item) => sum + (item.business_value || 0), 0);
     const activeWorkItems = workItems.filter(item => item.state === 'Active').length;
-    const completedWorkItems = workItems.filter(item => item.state === 'Completed' || item.state === 'Done').length;
+    const completedWorkItems = workItems.filter(item => 
+      item.state === 'Completed' || item.state === 'Done' || item.state === 'Closed'
+    ).length;
     
-    const overallProgress = Math.round(
-      objective.keyResults.reduce((sum, kr) => sum + kr.progress, 0) / objective.keyResults.length
-    );
+    const overallProgress = objective.keyResults.length > 0
+      ? Math.round(objective.keyResults.reduce((sum, kr) => sum + kr.progress, 0) / objective.keyResults.length)
+      : 0;
 
     const themes = Array.from(new Set(
       workItems.flatMap(item => (item.tags || '').split(',').map(tag => tag.trim()))
@@ -247,5 +349,7 @@ class OKRService {
     };
   }
 }
+
+export const okrService = new OKRService();
 
 export const okrService = new OKRService();
