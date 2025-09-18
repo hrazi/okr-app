@@ -51,17 +51,18 @@ class OKRService {
     // Extract the most common assignee or area path as owner
     const assignees = workItems
       .map(item => item.assigned_to)
-      .filter(assignee => assignee && assignee.trim().length > 0);
+      .filter((assignee): assignee is string => assignee != null && assignee.trim().length > 0);
     
     if (assignees.length === 0) {
       // Try to extract from area path
       const areaPaths = workItems
         .map(item => item.area_path)
-        .filter(path => path && path.trim().length > 0);
+        .filter((path): path is string => path != null && path.trim().length > 0);
       
       if (areaPaths.length > 0) {
         // Extract team name from area path (e.g., "Project\\Team" -> "Team")
-        const teamName = areaPaths[0].split('\\').pop();
+        const pathParts = areaPaths[0].split('\\');
+        const teamName = pathParts[pathParts.length - 1];
         return teamName || 'Unassigned Team';
       }
       
@@ -349,7 +350,5 @@ class OKRService {
     };
   }
 }
-
-export const okrService = new OKRService();
 
 export const okrService = new OKRService();
