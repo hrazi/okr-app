@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OKR Summary Application - Demo</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #1976d2; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .section { background: #f5f5f5; padding: 20px; margin-bottom: 20px; border-radius: 8px; }
+        .card { background: white; padding: 15px; margin-bottom: 15px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card.clickable { cursor: pointer; transition: all 0.2s ease; }
+        .card.clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); background: #f8f9fa; }
+        .ado-link { display: inline-flex; align-items: center; gap: 5px; color: #1976d2; text-decoration: none; font-size: 12px; margin-top: 8px; }
+        .ado-link:hover { text-decoration: underline; }
+        .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .status-published { background: #4caf50; color: white; }
+        .status-draft { background: #ff9800; color: white; }
+        .priority-1 { background: #f44336; color: white; }
+        .priority-2 { background: #ff9800; color: white; }
+        .effort-high { background: #e3f2fd; color: #1976d2; padding: 2px 6px; border-radius: 3px; }
+        .work-item-meta { display: flex; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+        .meta-chip { background: #e0e0e0; padding: 2px 6px; border-radius: 3px; font-size: 11px; }
+        .flex { display: flex; gap: 20px; }
+        .column { flex: 1; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 IC3 OKR Summary Application</h1>
+        <p>Infrastructure & Core Components OKR tracking with real Azure DevOps work items from Skype/SBS project</p>
+        <small style="opacity: 0.8;">Data source: Azure DevOps Query ID from Skype organization</small>
+    </div>
+
+    <div class="flex">
+        <div class="column">
+            <div class="section">
+                <h2>📊 OKR Summaries</h2>
+                <div id="summaries">Loading...</div>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="section">
+                <h2>📋 Work Items</h2>
+                <div id="workItems">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>🔗 API Endpoints</h2>
+        <ul>
+            <li><a href="http://localhost:5000/health" target="_blank">Health Check</a></li>
+            <li><a href="http://localhost:5000/api/summaries" target="_blank">Get Summaries</a></li>
+            <li><a href="http://localhost:5000/api/work-items" target="_blank">Get Work Items</a></li>
+        </ul>
+    </div>
+
+    <script>
+        // Azure DevOps configuration
+        const ADO_ORGANIZATION = 'skype';
+        const ADO_PROJECT = 'SBS';
+        
+        const constructAdoUrl = (workItemId) => {
+            return `https://dev.azure.com/${ADO_ORGANIZATION}/${ADO_PROJECT}/_workitems/edit/${workItemId}`;
+        };
+
+        const openWorkItem = (workItemId) => {
+            const url = constructAdoUrl(workItemId);
+            window.open(url, '_blank', 'noopener,noreferrer');
+        };
+
+        // Load summaries
+        fetch('/api/summaries')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('summaries');
+                container.innerHTML = data.data.map(summary => `
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h3 style="margin: 0;">${summary.title}</h3>
+                            <span class="status status-${summary.status}">${summary.status}</span>
+                        </div>
+                        <p style="margin: 10px 0; color: #666;">${summary.description}</p>
+                        <small>Version ${summary.version} • Created: ${new Date(summary.created_at).toLocaleDateString()}</small>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                document.getElementById('summaries').innerHTML = '<p>Error loading summaries. Make sure the backend server is running.</p>';
+            });
+
+        // Load work items
+        fetch('/api/work-items')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('workItems');
+                container.innerHTML = data.data.map(item => `
+                    <div class="card clickable" onclick="openWorkItem(${item.id})" title="Click to open Work Item ${item.id} in Azure DevOps">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h3 style="margin: 0; font-size: 16px;">
+                                ${item.title}
+                                <span style="font-size: 14px; color: #1976d2;">🔗</span>
+                            </h3>
+                            <span class="status" style="background: #2196f3; color: white;">${item.state}</span>
+                        </div>
+                        <p style="margin: 10px 0; color: #666; line-height: 1.4;">${item.description}</p>
+                        <div class="work-item-meta">
+                            <span class="meta-chip">${item.work_item_type}</span>
+                            ${item.assigned_to ? `<span class="meta-chip">👤 ${item.assigned_to}</span>` : ''}
+                            <span class="meta-chip priority-${item.priority}" style="color: white;">P${item.priority}</span>
+                            <span class="effort-high">${item.effort} story points</span>
+                            <span class="meta-chip">💼 Value: ${item.business_value}</span>
+                        </div>
+                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
+                            <small style="color: #888;">
+                                <strong>ID:</strong> ${item.id} • 
+                                <strong>Area:</strong> ${item.area_path} • 
+                                <strong>Iteration:</strong> ${item.iteration_path}
+                            </small>
+                            <a href="${constructAdoUrl(item.id)}" target="_blank" class="ado-link" onclick="event.stopPropagation();">
+                                📋 Open in Azure DevOps →
+                            </a>
+                        </div>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                document.getElementById('workItems').innerHTML = '<p>Error loading work items. Make sure the backend server is running.</p>';
+            });
+    </script>
+</body>
+</html>
